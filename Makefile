@@ -3,7 +3,7 @@ ifeq ($(UNAME), Darwin)
 CXX      := /opt/homebrew/opt/llvm/bin/clang++
 LDFLAGS  := -L/opt/homebrew/opt/llvm/lib -L/opt/homebrew/opt/gsl/lib -Wl,-rpath,/opt/homebrew/opt/llvm/lib -lstdc++ -lm -lgsl
 else
-CXX      := g+ # linux
+CXX      := g++ # linux
 LDFLAGS := -L/usr/local/lib/ -lstdc++ -lm -lgsl # linux
 endif
 

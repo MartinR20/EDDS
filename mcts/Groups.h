@@ -19,14 +19,6 @@ public:
   int num_items;
   double **mu;
   double **sigma2;
-#ifdef USE_GSL
-  gsl_rng *gen;
-#else
-  std::random_device rd{};
-  std::mt19937 gen{rd()}; // mersenne twister, faster?
-  //std::minstd_rand0 gen{rd()}; // faster?
-  std::normal_distribution<> gaussian {0.0,1.0};
-#endif
   
   void create(int num_groups, double **mu, double **sigma2, int num_items) {
     if (num_groups>MAX_NUM_GROUPS) {
@@ -41,23 +33,15 @@ public:
      printf("g=%d, mu=%g, sigma2=%g\n",g,this->mu[g],this->sigma2[g]);
      }*/
     // initialise random number generator
-#ifdef USE_GSL
-    const gsl_rng_type *T;
-    gsl_rng_env_setup();
-    //T = gsl_rng_default;
-    T = gsl_rng_taus2; // slightly faster than mersenne twister
-    gen = gsl_rng_alloc(T);
-    gsl_rng_set(gen, (unsigned long)time(NULL));
-#endif
   }
   
   inline double gaussian(double sigma) {
     // this is the code hot spot, its the main bottleneck in the whole programme
     // gsl ziggurat random number generator seems quite a bit faster than standard c++ one.
 #ifdef USE_GSL
-    return gsl_ran_gaussian_ziggurat(gen, sigma);
+    return gsl_ran_gaussian_ziggurat(GSL_GEN, sigma);
 #else
-    return gaussian(gen)*sigma;
+    return gaussian(STD_GEN)*sigma;
 #endif
   }
   

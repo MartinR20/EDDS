@@ -9,6 +9,15 @@
 #include <iostream>
 #include <fstream>
 #include <sys/stat.h>
+
+#include <random>
+#include <gsl/gsl_rng.h>
+#include <gsl/gsl_randist.h>
+
+std::mt19937  STD_GEN;
+gsl_rng      *GSL_GEN;
+std::uniform_real_distribution<double> uniform(0.0,1.0);
+
 #include "MCTS.h"
 #include "Groups.h"
 
@@ -89,7 +98,7 @@ void read_vals(char* fname, double **vals, int *num_groups, int *num_items) {
   char valsfile[PATH_MAX+FILENAME_MAX];
   snprintf(valsfile,FILENAME_MAX,"%s/%s",cwd,fname);
   readcsv(valsfile, vals, num_groups, num_items, MAX_NUM_GROUPS);
-  printf("read from %s, num items %d, num_groups %d\n",valsfile,*num_items,*num_groups);
+  //printf("read from %s, num items %d, num_groups %d\n",valsfile,*num_items,*num_groups);
 }
 
 void toy_mu_and_sigma(double **mu, double **sigma2, int *num_groups, int *num_items) {
@@ -172,17 +181,18 @@ int main(int argc, char **argv) {
   bool use_user_ratings = false;
   int first_item=-1;
   bool use_montecarlo=true;
+  unsigned long seed = 0;
   //int first_item=199; //206, 113,75, 154
   
   // process command line options
   char c;
-  while ((c = (char)getopt(argc, argv,"m:s:t:n:r:f:u:vd:hd:l:c")) != EOF) {
+  while ((c = (char)getopt(argc, argv,"e:m:s:t:n:r:f:u:vd:hd:l:c")) != EOF) {
     switch(c) {
       case 'm':
-        mu_fname = optarg;
+        mu_filename = string(optarg);
         break;
       case 's':
-        sigma2_fname = optarg;
+        sigma_filename = string(optarg);
         break;
       case 't':
         max_tries = atoi(optarg);
@@ -218,11 +228,21 @@ int main(int argc, char **argv) {
       case 'h':
         usage(basename(argv[0]));
         exit(0);
+      case 'e':
+        seed = atol(optarg);
+        break;
       default:
         exit(1);
     }
   }
-  printf("settings: max tries=%d, max count %d, num rollouts %d, max_lookahead %d, max_num_rollouts %d first item %d\n", max_tries, max_count,num_rollouts, first_item,max_lookahead,max_num_rollouts);
+  //printf("settings: max tries=%d, max count %d, num rollouts %d, max_lookahead %d, max_num_rollouts %d first item %d\n", max_tries, max_count,num_rollouts, first_item,max_lookahead,max_num_rollouts);
+  STD_GEN = std::mt19937(seed);
+  const gsl_rng_type *T;
+  gsl_rng_env_setup();
+  //T = gsl_rng_default;
+  T = gsl_rng_taus2; // slightly faster than mersenne twister
+  GSL_GEN = gsl_rng_alloc(T);
+  gsl_rng_set(GSL_GEN, (unsigned long)seed);
   
   // read in per-group item rating means and variances
   double **mu, **sigma2;
@@ -238,7 +258,7 @@ int main(int argc, char **argv) {
   
   Groups groups;
   groups.create(num_groups, mu, sigma2, num_items);
-  printf("num groups %d, num_items %d\n",num_groups,num_items);
+  //printf("num groups %d, num_items %d\n",num_groups,num_items);
 
   // read in pre-recorded user ratings, if specified
   double ***user_ratings=nullptr;
@@ -249,13 +269,13 @@ int main(int argc, char **argv) {
       user_ratings[i] = (double**)malloc(MAX_NUM_SAMPLES*sizeof(double*));
     }
     read_user_ratings_csv(user_ratings_fname,user_ratings, num_groups, num_items);
-    printf("read user ratings from %s\n",user_ratings_fname);
+    //printf("read user ratings from %s\n",user_ratings_fname);
   }
   
   const double time_limit = 0.0; // in milliseconds.  not used.
   const int max_disp_count=25; // truncate lengthy output after this many lines
   
-  double rewards[MAX_NUM_GROUPS]={};
+  std::vector<std::vector<std::vector<std::pair<int,int>>>> rewards_n(max_count, std::vector<std::vector<std::pair<int,int>>>(MAX_NUM_GROUPS));
   auto overall_start = chrono::steady_clock::now();
   int disp_count=0;
   // this magic openmp pragma parallelises the for loop, we keep separate state within loop
@@ -263,15 +283,18 @@ int main(int argc, char **argv) {
   // to install openmp use "brew install llvm omp"  (need to install llvm as default clang
   // install doesn't support openmp, sigh.
 
+  int max_count_ = max_count+1;
 
+  for(max_count = 1; max_count < max_count_; ++max_count) {
+  auto &rewards = rewards_n[max_count-1];
+     
 
-  #pragma omp parallel for
+  //#pragma omp parallel for
   for (int user_group=0; user_group<num_groups; user_group++) {
-    rewards[user_group]=0;
     MonteCarloTree tree; // by keeping separate tree instances here we can parallelise loop
     for (int tries=0; tries<max_tries; tries++){
       if (disp_count<max_disp_count) {
-        printf("**try %d\n",tries);
+        //printf("**try %d\n",tries);
       }
       int used_items[MAX_NUM_ITEMS] = {};
       int used_items_list[MAX_NUM_ITEMS] = {};
@@ -322,7 +345,7 @@ int main(int argc, char **argv) {
         }
         //std::vector<int> path={}; tree.print_tree(tree.root, path);
         if (child_lowestN(tree.root)==0) {
-          printf("WARNING: unvisited child nodes, increase simulation_counts from %d.\n", simulation_counts);
+          //printf("WARNING: unvisited child nodes, increase simulation_counts from %d.\n", simulation_counts);
         }
         int next_item = best_child2(tree.root);
         used_items[next_item]=1; // record that this item has now been used
@@ -337,7 +360,7 @@ int main(int argc, char **argv) {
         }
         if (disp_count<max_disp_count) {
           // stop display once gets larger
-          printf("%d %d %g, time %gms/num runs %d\n",num_used_items,next_item,ratings[num_used_items],diff_time, count_sim);
+          //printf("%d %d %g, time %gms/num runs %d\n",num_used_items,next_item,ratings[num_used_items],diff_time, count_sim);
           disp_count++;
         }
         num_used_items++;
@@ -349,9 +372,11 @@ int main(int argc, char **argv) {
        printf("\n");*/
       int g = groups.estimated_group(used_items_list, ratings, num_used_items);
       //printf("g=%d\n",g);
-      if (g==user_group) {
-        rewards[user_group]++;
-      }
+      //if (g==user_group) {
+      //  rewards[user_group].emplace_back(g,user_group);
+      //}
+      
+      rewards[user_group].emplace_back(g,user_group);
       
       // for(int i = 0; i < num_used_items; i++){
         
@@ -360,14 +385,14 @@ int main(int argc, char **argv) {
       //     group_acc[user_group][i] += 1;
       //   }
       // }
-
-      
     }
-    rewards[user_group] = rewards[user_group]*1.0/max_tries;
-    printf("group %d success rate %g\n", user_group, rewards[user_group]);
+    //rewards[user_group] = rewards[user_group]*1.0/max_tries;
+    //printf("group %d success rate %g\n", user_group, rewards[user_group]);
+  }
+   
   }
   
-
+#if 0
   const int dir_err = mkdir("output", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
   if (-1 == dir_err){
       printf("Directory already exists OR Error creating directory!n");
@@ -387,11 +412,36 @@ int main(int argc, char **argv) {
     printf("%4d ",i);
   }
   printf("\n");
+
   double mean=0.0;
   for (int i=0; i<num_groups; i++) {
     printf("%4g ",rewards[i]);
     mean+=rewards[i];
   }
   printf("\nmean=%g\n",mean/num_groups);
+#endif
+
+  printf("ground_truth");
+
+  for(int i = 1; i < max_count; ++i) {
+     printf(", iters%d", i);
+  }
+
+  printf("\n");
+
+  for (int i=0; i<num_groups; i++) {
+
+     for (int j=0; j<rewards_n[0][i].size(); j++) {
+
+        printf("%d", rewards_n[0][i][j].second);
+
+        for(int t=0; t < max_count-1; ++t) {
+           printf(", %d", rewards_n[t][i][j].first);
+        }
+
+        printf("\n");
+     }
+  }
+  printf("\n");
 
 }

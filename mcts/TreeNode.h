@@ -5,9 +5,6 @@
 #include "utils.h"
 
 #include <random>
-std::random_device rd{};
-std::mt19937 gen{rd()}; // mersenne twister, faster?
-std::uniform_real_distribution<double> uniform(0.0,1.0);
 
 // we trade off memory usage for greater speed by preallocating child array.
 // this also limits the max number of items that can be conisdered
@@ -171,7 +168,7 @@ int best_child(TreeNode* node) {
       }
     }
   }
-  int rnd = (int)(uniform(gen)*(num_bestitems-1)+0.5);
+  int rnd = (int)(uniform(STD_GEN)*(num_bestitems-1)+0.5);
   // exit(0);
   return best_items[rnd];
 }
@@ -216,7 +213,7 @@ int best_child2(TreeNode* node) {
       }
     }
   }
-  int rnd = (int)(uniform(gen)*(num_bestitems-1)+0.5);
+  int rnd = (int)(uniform(STD_GEN)*(num_bestitems-1)+0.5);
   // exit(0);
   return best_items[rnd];
 }

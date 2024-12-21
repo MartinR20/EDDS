@@ -7,14 +7,9 @@
 #include <chrono>
 #include <cstring>
 
-#define USE_GSL 1
-#ifdef USE_GSL
-// GNU Scientific Library - install using "brew install gsl"
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_randist.h>
-#else
 #include <random>
-#endif
 
 #include "Groups.h"
 #include "TreeNode.h"
@@ -25,20 +20,10 @@ public:
   TreeNode* root=nullptr;
   TreeNodeMem treeMem;
   MonteCarloTree() : root(nullptr) {}
-#ifdef USE_GSL
-  gsl_rng *gen;
+
   inline double uniform_rnd() {
-    return gsl_rng_uniform(gen);
+    return uniform(STD_GEN);
   }
-#else
-  std::random_device rd{};
-  std::mt19937 gen{rd()}; // mersenne twister, faster?
-  //std::minstd_rand0 gen{rd()}; // faster?
-  std::uniform_real_distribution<double> uniform(0.0,1.0);
-  inline double uniform_rnd() {
-    return uniform(gen);
-  }
-#endif
 
   TreeNode* UCB (TreeNode* n)  {		
     // find a node with highest score
@@ -300,15 +285,6 @@ public:
     root->child_size=0;
     root->N=0; root->Q=0; //root->Q2=0;
     //srand((unsigned int)time(NULL));
-#ifdef USE_GSL
-    const gsl_rng_type *T;
-    gsl_rng_env_setup();
-    //T = gsl_rng_default;
-    T = gsl_rng_taus2; // slightly faster than mersenne twister
-    gen = gsl_rng_alloc(T);
-    gsl_rng_set(gen, (unsigned long)time(NULL));
-#endif
-    
   }
   
 };
