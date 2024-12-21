@@ -1,3 +1,24 @@
+# EDDS
+
+The code has been adjusted so that it supports seeding for the pseudo random genertor and outputs results in a csv format for easier usage in python. 
+A run.sh script also has been added that runs all experiments for a given seed. 
+Eight results have been generated using this script and can be found in folders named according to the seeds (73308559, 83638859, 63381133, 61451749, 88666223, 45755797, 34521869, 93643757) used for generation. The source of the experiments are the files in the data directory which have been kept from the original repository and are generated according to the following paragraph from the paper:
+
+```
+Clustering Users. We use training data to cluster users into groups
+and estimate the mean µ(д,v) and variance σ(д,v)
+2 of the ratings
+by each group д for item v. We use the BLC matrix-factorization
+clustering algorithm [4] for this, although other clustering algorithms might also be used. We vary the number of groups/clusters
+from 4 to 32 and report results for each.
+```
+
+These means and sigmas are then used to model new users as multinormal distributions.
+
+
+
+The following is from the original repository of the paper and should still work for installing the modified program:
+
 # mcts-rec
 
 ## Introduction
